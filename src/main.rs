@@ -5,24 +5,52 @@ use std::ffi::OsString;
 use std::fs::File;
 use std::process;
 use sha2::{Sha256, Digest};
+use serde::{Serialize, Deserialize};
+
+#[derive(Serialize, Deserialize)]
+struct InputRow {
+    cpf: String,
+    num_chpras: String,
+    dat_abta_cta: String,
+    final_cartao: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct OutputRow {
+    cpf_hasheado: String,
+    cpf: String,
+    num_chpras: String,
+    dat_abta_cta: String,
+    final_cartao: String,
+}
 
 fn run() -> Result<(), Box<dyn Error>> {
     let input = File::open(get_arg(1)?)?;
     let output = get_arg(2)?;
     
     let mut rdr = csv::ReaderBuilder::new()
-    .has_headers(true)
-    .delimiter(b',')
-    .double_quote(true)
-    .from_reader(input);
+        .has_headers(true)
+        .delimiter(b',')
+        .double_quote(true)
+        .from_reader(input);
 
-    let mut wtr = csv::WriterBuilder::new().from_path(output)?;
+    let mut wtr = csv::WriterBuilder::new()
+        .delimiter(b',')
+        .has_headers(true)
+        .double_quote(false)
+        .from_path(output)?;
     
     for result in rdr.deserialize() {
-        let record: String = result?;
+        let record: InputRow = result?;
         let mut hasher = Sha256::new();
-        hasher.update(record);
-        wtr.serialize(format!("{:x}", hasher.finalize()))?;
+        hasher.update(record.cpf.clone());
+        wtr.serialize(&[OutputRow {
+            cpf_hasheado: format!("{:x}", hasher.finalize()), 
+            cpf: record.cpf, 
+            num_chpras: record.num_chpras, 
+            dat_abta_cta: record.dat_abta_cta, 
+            final_cartao: record.final_cartao
+        }])?;
     }
 
     wtr.flush()?;
